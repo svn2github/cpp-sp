@@ -1,0 +1,221 @@
+<ShibbolethTargetConfig	xmlns="urn:mace:shibboleth:target:config:1.0"
+        logger="@-PKGSYSCONFDIR-@/shibboleth.logger" clockSkew="180">
+
+    <Extensions>
+        <Library path="@-LIBEXECDIR-@/xmlproviders.so" fatal="true"/>
+    </Extensions>
+
+    <SHAR logger="@-PKGSYSCONFDIR-@/shar.logger">
+		
+		<!--
+        <Extensions>
+            <Library path="@-LIBEXECDIR-@/shib-mysql-ccache.so" fatal="false"/>
+        </Extensions>
+        -->
+    
+    	<!-- only one listener can be defined. -->
+        <UnixListener address="/tmp/shar-socket"/>
+
+        <!-- <TCPListener address="127.0.0.1" port="12345" acl="127.0.0.1"/> -->
+        
+        <!--
+        See deploy guide for details, but:
+        	cacheTimeout - how long before expired sessions are purged from the cache
+        	AATimeout - how long to wait for an AA to respond
+        	AAConnectTimeout - how long to wait while connecting to an AA
+        	defaultLifetime - if attributes come back without guidance, how long should they last?
+        	strictValidity - if we have expired attrs, and can't get new ones, keep using them?
+        	propagateErrors - suppress errors while getting attrs or let user see them?
+        	retryInterval - if propagateErrors is false and query fails, how long to wait before trying again
+        -->
+        <MemorySessionCache cleanupInterval="300" cacheTimeout="3600" AATimeout="30" AAConnectTimeout="15"
+            defaultLifetime="1800" retryInterval="300" strictValidity="false" propagateErrors="true"/>
+        <!--
+        <MySQLSessionCache cleanupInterval="300" cacheTimeout="3600" AATimeout="30" AAConnectTimeout="15"
+               defaultLifetime="1800" retryInterval="300" strictValidity="false" propagateErrors="true"
+               mysqlTimeout="14400">
+            <Argument>&#x2D;&#x2D;language=@-PREFIX-@/share/english</Argument>
+            <Argument>&#x2D;&#x2D;datadir=@-PREFIX-@/data</Argument>
+        </MySQLSessionCache>
+        -->
+    </SHAR>
+    
+    <SHIRE logger="@-PKGSYSCONFDIR-@/shire.logger">
+        <!--
+        To customize behavior, map hostnames and path components to applicationId and other settings.
+        Can be either a pointer to an external file or an inline configuration.
+        -->
+        <!--
+        <RequestMapProvider type="edu.internet2.middleware.shibboleth.target.provider.XMLRequestMap"
+            uri="@-PKGSYSCONFDIR-@/applications.xml"/>
+        -->
+
+        <RequestMapProvider type="edu.internet2.middleware.shibboleth.target.provider.XMLRequestMap">
+            <RequestMap applicationId="default">
+                <!--
+                This requires a session for documents in /secure on the containing host with http and
+                https on the default ports. Note that the name and port in the <Host> elements MUST match
+                Apache's ServerName and Port directives or the IIS Site mapping in the <ISAPI> element
+                below.
+                -->
+                <Host name="localhost" scheme="https">
+                    <Path name="secure" requireSession="true" exportAssertion="true">
+                    	<!-- Example shows a subfolder on the SSL port assigned to a separate <Application> -->
+	                    <Path name="admin" applicationId="foo-admin"/>
+	                </Path>
+                </Host>
+                <Host name="localhost" scheme="http">
+                    <Path name="secure" requireSession="true" exportAssertion="true"/>
+                </Host>
+            </RequestMap>
+        </RequestMapProvider>
+        
+        <Implementation>
+            <ISAPI normalizeRequest="true">
+            	<!-- Maps IIS IID values to the host scheme/name/port. -->
+                <Site id="1" scheme="http" name="localhost" port="80"/>
+            </ISAPI>
+        </Implementation>
+    </SHIRE>
+
+    <Applications xmlns:saml="urn:oasis:names:tc:SAML:1.0:assertion"
+    	id="default" providerId="https://example.org/shibboleth/target">
+
+        <!--
+        Controls session lifetimes, address checks, cookie handling, WAYF, and the SHIRE location.
+        You MUST supply a unique shireURL value (and a wayfURL that can be the same) for each of your
+        applications. The value can be a relative path, a URL with no hostname (https:///path) or a
+        full URL. The system will compute the value that applies based on the resource. Using
+        shireSSL="true" will force the protocol to be https. You should also add a cookieProps
+        setting of "; secure" in that case. The default wayfURL is the InQueue federation's service.
+        Change to https://localhost/shibboleth/HS for internal testing against your own origin.
+        -->
+        <Sessions lifetime="7200" timeout="3600" checkAddress="true"
+        	wayfURL="https://wayf.internet2.edu/InQueue/WAYF"
+            shireURL="/Shibboleth.shire" shireSSL="false"/>
+
+        <!--
+        You should customize these pages! You can add attributes with values that can be plugged
+        into your templates.
+        -->
+        <Errors shire="@-PKGSYSCONFDIR-@/shireError.html"
+            rm="@-PKGSYSCONFDIR-@/rmError.html"
+            access="@-PKGSYSCONFDIR-@/accessError.html"
+            supportContact="root@localhost"
+            logoLocation="/shibtarget/logo.jpg"
+            styleSheet="/shibtarget/main.css"/>
+
+		<!-- Indicates what credentials to use when communicating -->
+        <CredentialUse TLS="defcreds" Signing="defcreds">
+            <!-- RelyingParty elements customize credentials for specific origins or federations -->
+            <!--
+            <RelyingParty Name="urn:mace:inqueue" TLS="inqueuecreds" Signing="inqueuecreds"/>
+            -->
+        </CredentialUse>
+            
+        <!-- Use designators to request specific attributes or none to ask for all -->
+        <!--
+        <saml:AttributeDesignator AttributeName="urn:mace:dir:attribute-def:eduPersonScopedAffiliation"
+            AttributeNamespace="urn:mace:shibboleth:1.0:attributeNamespace:uri"/>
+        <saml:AttributeDesignator AttributeName="urn:mace:dir:attribute-def:eduPersonTargetedID"
+            AttributeNamespace="urn:mace:shibboleth:1.0:attributeNamespace:uri"/>
+        -->
+
+        <!-- AAP can be inline or in a separate file -->
+        <AAPProvider type="edu.internet2.middleware.shibboleth.target.provider.XMLAAP" uri="@-PKGSYSCONFDIR-@/AAP.xml"/>
+        <!--
+        <AAPProvider type="edu.internet2.middleware.shibboleth.target.provider.XMLAAP"
+            <AttributeAcceptancePolicy xmlns="urn:mace:shibboleth:aap:1.0">
+                <AttributeRule Name="urn:mace:dir:attribute-def:eduPersonPrincipalName" Header="REMOTE_USER" Alias="user">
+                    <AnySite>
+                        <AnyValue/>
+                    </AnySite>
+                </AttributeRule>
+            </AttributeAcceptancePolicy>
+        </AAPProvider>
+        -->
+        
+        <!-- Metadata consists of site/operational metadata, trust, revocation providers. Can be external or inline. -->
+        <FederationProvider type="edu.internet2.middleware.shibboleth.common.provider.XMLMetadata"
+            uri="@-PKGSYSCONFDIR-@/IQ-sites.xml"/>
+        <FederationProvider type="edu.internet2.middleware.shibboleth.common.provider.XMLMetadata">
+			<SiteGroup Name="https://example.org/shibboleth" xmlns="urn:mace:shibboleth:1.0">
+				<OriginSite Name="https://example.org/shibboleth/origin">
+					<Alias>Localhost Test Deployment</Alias>
+					<Contact Type="technical" Name="Your Name Here" Email="root@localhost"/>
+					<HandleService Location="https://localhost/shibboleth/HS" Name="CN=localhost, O=Shibboleth Project, C=US"/>
+					<AttributeAuthority Location="https://localhost/shibboleth/AA" Name="CN=localhost, O=Shibboleth Project, C=US"/>
+					<Domain>localhost</Domain>
+				</OriginSite>
+			</SiteGroup>
+        </FederationProvider>
+        
+        <TrustProvider type="edu.internet2.middleware.shibboleth.common.provider.XMLTrust"
+            uri="@-PKGSYSCONFDIR-@/IQ-trust.xml"/>
+
+		<!--
+		Revocation using X.509 CRLs is an optional feature in some trust metadata or you may
+		supply your own revocation information locally.
+		-->
+        <!--
+        <RevocationProvider type="edu.internet2.middleware.shibboleth.common.provider.XMLRevocation"
+            uri="@-PKGSYSCONFDIR-@/IQ-trust.xml"/>
+        -->
+                    
+        <!-- zero or more SAML Audience condition matches -->
+        <saml:Audience>urn:mace:inqueue</saml:Audience>
+        
+        <!--
+        You can customize behavior of specific applications here. You must supply a complete <Sessions>
+        element to inidicate a distinct shireURL and wayfURL for this application, along with any other
+        non-default settings you require. None will be inherited. The wayfURL can be the same as the
+        default above, but the shireURL MUST be different and MUST map to this application in the
+        RequestMap. The default elements inside the outer <Applications> element generally have to be
+        overridden in an all or nothing fashion. That is, if you supply an <Errors> override, you MUST
+        include all attributes you want to apply, as they will not be inherited. Similarly, if you
+        specify an element such as <FederationProvider>, it is not additive with the defaults, but
+        replaces them.
+        
+        The example below shows a special application that requires use of SSL when establishing
+        sessions, restricts the session cookie to SSL and a specific folder, and inherits most other
+        behavior except that it requests only EPPN from the origin instead of asking for all attributes.
+        -->
+        <!-- 
+        <Application id="foo-admin">
+	        <Sessions lifetime="7200" timeout="3600" checkAddress="true"
+	            shireURL="/secure/admin/Shibboleth.shire" shireSSL="true" cookieProps="; path=/secure/admin; secure"
+	            wayfURL="https://wayf.internet2.edu/InQueue/WAYF"/>
+            <saml:AttributeDesignator AttributeName="urn:mace:dir:attribute-def:eduPersonPrincipalName"
+                AttributeNamespace="urn:mace:shibboleth:1.0:attributeNamespace:uri"/> 
+        </Application>
+        -->
+
+    </Applications>
+    
+    <!-- Define all the private keys and certificates here that you reference from <CredentialUse>. -->
+    <CredentialsProvider type="edu.internet2.middleware.shibboleth.common.Credentials">
+        <Credentials xmlns="urn:mace:shibboleth:credentials:1.0">
+            <FileResolver Id="defcreds">
+                <Key format="PEM">
+                    <Path>@-PKGSYSCONFDIR-@/shar.key</Path>
+                </Key>
+                <Certificate format="PEM">
+                    <Path>@-PKGSYSCONFDIR-@/shar.crt</Path>
+                </Certificate>
+            </FileResolver>
+            
+            <!--
+            <FileResolver Id="inqueuecreds">
+                <Key format="PEM" password="handsoff">
+                    <Path>@-PKGSYSCONFDIR-@/inqueue.key</Path>
+                </Key>
+                <Certificate format="PEM">
+                    <Path>@-PKGSYSCONFDIR-@/inqueue.crt</Path>
+                </Certificate>
+            </FileResolver>
+            -->
+        </Credentials>
+    </CredentialsProvider>
+
+</ShibbolethTargetConfig>
+

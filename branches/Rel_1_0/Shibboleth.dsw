@@ -1,0 +1,110 @@
+Microsoft Developer Studio Workspace File, Format Version 6.00
+# WARNING: DO NOT EDIT OR DELETE THIS WORKSPACE FILE!
+
+###############################################################################
+
+Project: "isapi_shib"=.\isapi_shib\isapi_shib.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name shib
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "mod_eduPerson"=.\mod_eduPerson\mod_eduPerson.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name eduPerson
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name shib
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "mod_shib"=.\mod_shib\mod_shib.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name eduPerson
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name shib
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Project: "shib"=.\shib\shib.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "shibtarget"=".\shib-target\shibtarget.dsp" - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+}}}
+
+###############################################################################
+
+Project: "shibtest"=.\shibtest\shibtest.dsp - Package Owner=<4>
+
+Package=<5>
+{{{
+}}}
+
+Package=<4>
+{{{
+    Begin Project Dependency
+    Project_Dep_Name eduPerson
+    End Project Dependency
+    Begin Project Dependency
+    Project_Dep_Name shib
+    End Project Dependency
+}}}
+
+###############################################################################
+
+Global:
+
+Package=<5>
+{{{
+}}}
+
+Package=<3>
+{{{
+}}}
+
+###############################################################################
+

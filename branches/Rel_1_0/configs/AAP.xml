@@ -1,0 +1,52 @@
+<AttributeAcceptancePolicy xmlns="urn:mace:shibboleth:1.0">
+	
+	<!--
+	An AAP is a set of AttributeRule elements, each one
+	referencing a specific attribute by URI. All attributes that
+	are implemented via the built-in Simple and Scoped classes must be
+	listed in the file or they will be filtered out.
+	
+	Scoped attributes are also filtered on Scope via the Domain elements
+	in the site metadata.
+	-->
+	
+	<!-- Filtering rule to limit values to eduPerson-defined enumeration. -->
+	<AttributeRule Name="urn:mace:dir:attribute-def:eduPersonScopedAffiliation">
+        <AnySite>
+            <Value>member</Value>
+            <Value>faculty</Value>
+            <Value>student</Value>
+            <Value>staff</Value>
+            <Value>alum</Value>
+            <Value>affiliate</Value>
+            <Value>employee</Value>
+        </AnySite>
+	</AttributeRule>
+
+	<!-- Basic rule to pass through any value. -->
+    <AttributeRule Name="urn:mace:dir:attribute-def:eduPersonPrincipalName">
+        <AnySite>
+            <AnyValue/>
+        </AnySite>
+    </AttributeRule>
+
+	<!-- Entitlements tend to be filtered per-site. -->
+	<AttributeRule Name="urn:mace:dir:attribute-def:eduPersonEntitlement">
+
+		<!--
+		Optional site rule that applies to any site
+		<AnySite>
+			<Value>urn:mace:example.edu:exampleEntitlement</Value>
+		</AnySite>
+		-->
+		
+		<!-- Specific rules for an origin site, these are just InCommon development/sample sites. -->
+		<SiteRule Name="urn:mace:incommon:pilot:example.edu">
+			<Value Type="regexp">^urn:mace:.+$</Value>
+		</SiteRule>
+		<SiteRule Name="urn:mace:incommon:pilot:shibdev.edu">
+			<Value Type="regexp">^urn:mace:.+$</Value>
+		</SiteRule>
+	</AttributeRule>
+
+</AttributeAcceptancePolicy>

@@ -1,0 +1,8 @@
+.libs
+.deps
+Makefile
+Makefile.in
+shibtest
+posttest
+xmlsectest
+inittest

@@ -1,0 +1,11 @@
+Makefile.in
+Makefile
+.libs
+.deps
+*.lo
+*.la
+*.plg
+Release
+Debug
+*.dep
+*.mak

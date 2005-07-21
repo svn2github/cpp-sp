@@ -1,0 +1,5 @@
+Debug
+*.plg
+Release
+*.dep
+*.mak

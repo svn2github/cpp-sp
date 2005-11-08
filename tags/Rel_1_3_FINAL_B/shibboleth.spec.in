@@ -1,0 +1,192 @@
+Name:		shibboleth
+Summary:	Open source system to enable inter-institutional resource sharing
+Version:	@-VERSION-@
+Release:	7
+#Copyright:	University Corporation for Advanced Internet Development, Inc.
+Group:		System Environment/Libraries
+License:	Apache style
+URL:		http://shibboleth.internet2.edu/
+Source0:	http://wayf.internet2.edu/shibboleth/%{name}-%{version}.tar.gz
+Source1:	http://wayf.internet2.edu/shibboleth/%{name}-%{version}.tar.gz.asc
+BuildRoot:	%{_tmppath}/%{name}-%{version}-root
+
+BuildRequires:	openssl-devel, curl-devel >= 7.10.6, xerces-c-devel >= 2.6.1
+BuildRequires:	xml-security-c-devel >= 1.1.0, log4cpp-devel >= 0.3.5
+BuildRequires:	zlib-devel, opensaml-devel >= 1.1, httpd-devel
+
+%description
+Shibboleth, a project of Internet2/MACE, is developing architectures,
+policy structures, practical technologies, and an open source
+implementation to support inter-institutional sharing of web resources
+subject to access controls. In addition, Shibboleth will develop a
+policy framework that will allow inter-operation within the higher
+education community.
+
+This package contains the shibboleth runtime library and apache module.
+
+%package devel
+Summary: Shibboleth development Headers
+Group: Development/Libraries
+Requires: %{name} = %{version}
+
+%description devel
+Shibboleth, a project of Internet2/MACE, is developing architectures,
+policy structures, practical technologies, and an open source
+implementation to support inter-institutional sharing of web resources
+subject to access controls. In addition, Shibboleth will develop a
+policy framework that will allow inter-operation within the higher
+education community.
+
+This package contains the headers and other necessary files to build
+applications that use the shibboleth library.
+
+%package selinux-policy-targeted
+Summary: SELinux policy targeted configuration for Shibboleth SP
+Group: System Environment/Base
+Requires: selinux-policy-targeted-sources
+
+%description selinux-policy-targeted
+Shibboleth, a project of Internet2/MACE, is developing architectures,
+policy structures, practical technologies, and an open source
+implementation to support inter-institutional sharing of web resources
+subject to access controls. In addition, Shibboleth will develop a
+policy framework that will allow inter-operation within the higher
+education community.
+
+This package contains the SELinux Policy (source) Configuration to
+enable the Shibboleth SP to integrate into Apache HTTPD in Red Hat /
+Fedora's Policy Targeted SELinux implementation.  It requires
+rebuilding your policy, so you must have the policy-targeted-source
+installed.
+
+%prep
+%setup -q
+
+%build
+%configure --enable-apache-20
+make
+make -C selinux
+
+%install
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
+rm -rf _docs
+
+make install DESTDIR=$RPM_BUILD_ROOT
+make -C selinux install DESTDIR=$RPM_BUILD_ROOT
+mv $RPM_BUILD_ROOT/usr/doc/shibboleth _docs
+
+find $RPM_BUILD_ROOT/%{_libexecdir} -type f -or -type l | grep \.so |
+  sed -e "s|$RPM_BUILD_ROOT||" | sort > rpm.filelist
+
+%check || :
+make check
+
+%clean
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf $RPM_BUILD_ROOT
+
+%post
+/sbin/ldconfig
+
+# Plug the shibboleth SP into Apache2 on a Red Hat system.
+if [ -d %{_sysconfdir}/httpd/conf.d ] ; then 
+	if [ ! -f %{_sysconfdir}/httpd/conf.d/shib.conf ] ; then
+		sed "s/\/usr\/doc\/shibboleth/\/usr\/share\/doc\/shibboleth-@-VERSION-@/g" \
+			%{_sysconfdir}/shibboleth/apache2.config \
+			> %{_sysconfdir}/httpd/conf.d/shib.conf
+	fi
+fi
+
+# Install the shibd init.d scripts and service
+if [ -d %{_sysconfdir}/init.d ] ; then
+	if [ ! -f %{_sysconfdir}/init.d/shibd ] ; then
+		cp -p %{_sysconfdir}/shibboleth/shibd %{_sysconfdir}/init.d/shibd
+		chmod 755 %{_sysconfdir}/init.d/shibd
+		chkconfig --add shibd
+	fi
+fi
+
+%postun
+/sbin/ldconfig
+
+# delete the shibboleth apache configuration if we're being removed
+[ "$1" = 0 ] || exit 0
+[ -f %{_sysconfdir}/httpd/conf.d/shib.conf ] && \
+    rm -f %{_sysconfdir}/httpd/conf.d/shib.conf
+
+# clear init.d state
+chkconfig --del shibd
+[ -f %{_sysconfdir}/init.d/shibd ] && \
+    rm -f %{_sysconfdir}/init.d/shibd
+
+%triggerin selinux-policy-targeted -- %{name}
+restorecon %{_sbindir}/shibd
+
+%triggerin selinux-policy-targeted -- selinux-policy-targeted-sources
+cd %{_sysconfdir}/selinux/targeted/src/policy || exit 1
+make -W install
+make load
+restorecon %{_sbindir}/shibd
+
+%files -f rpm.filelist
+%defattr(-,root,root,-)
+%doc _docs/CREDITS.txt _docs/NOTICE.txt _docs/NEWS.txt _docs/logo.jpg
+%doc _docs/main.css _docs/README.txt _docs/LICENSE.txt _docs/mysql-4.0.12.diff
+%{_sbindir}/shibd
+%{_sbindir}/siterefresh
+%{_bindir}/shibtest
+%{_libdir}/libshib.so.*
+%{_libdir}/libshib-target.so.*
+%dir /var/log/shibboleth
+%dir %{_datadir}/xml/shibboleth
+%{_datadir}/xml/shibboleth/*.xsd
+%{_datadir}/xml/shibboleth/*.xsl
+%dir %{_sysconfdir}/shibboleth
+%config(noreplace) %{_sysconfdir}/shibboleth/*.xml
+%config(noreplace) %{_sysconfdir}/shibboleth/*.html
+%config(noreplace) %{_sysconfdir}/shibboleth/*.logger
+%config %{_sysconfdir}/shibboleth/inqueue.pem
+%config %{_sysconfdir}/shibboleth/sp-example.crt
+%config %{_sysconfdir}/shibboleth/sp-example.key
+%{_sysconfdir}/shibboleth/*.dist
+%{_sysconfdir}/shibboleth/apache*.config
+%{_sysconfdir}/shibboleth/shibd
+
+%exclude %{_bindir}/posttest
+%exclude %{_bindir}/test-client
+%exclude %{_libexecdir}/*.la
+
+%files devel
+%defattr(-,root,root,-)
+%{_includedir}
+%{_libdir}/libshib.so
+%{_libdir}/libshib-target.so
+
+%files selinux-policy-targeted
+%defattr(-,root,root,-)
+%{_sysconfdir}/selinux/targeted/src/policy/file_contexts/program/*.fc
+%{_sysconfdir}/selinux/targeted/src/policy/domains/program/*.te
+
+%changelog
+* Tue Nov 8 2005 Scott Cantor  <cantor.2@osu.edu>  - 1.3-7
+- Applied new fix for secadv 20050901 plus rollup
+
+* Fri Sep 23 2005 Scott Cantor  <cantor.2@osu.edu>  - 1.3-6
+- Minor patches and default config changes
+- pidfile patch
+- Fix shib.conf creation
+- Integrated init.d script
+- Prevent replacement of config files
+
+* Thu Sep 1 2005  Scott Cantor  <cantor.2@osu.edu>  - 1.3-5
+- Applied fix for secadv 20050901 plus rollup of NSAPI fixes
+
+* Sun Apr 24 2005  Scott Cantor  <cantor.2@osu.edu>  - 1.3-1
+- Updated test programs and location of schemas.
+- move siterefresh to to sbindir
+
+* Fri Apr  1 2005  Derek Atkins  <derek@ihtfp.com>  - 1.3-1
+- Add selinux-targeted-policy package
+- move shar to sbindir
+
+* Tue Oct 19 2004  Derek Atkins  <derek@ihtfp.com>  - 1.2-1
+- Create SPEC file based on various versions in existence.

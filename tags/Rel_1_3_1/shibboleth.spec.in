@@ -1,0 +1,218 @@
+Name:		shibboleth
+Summary:	Open source system to enable inter-institutional resource sharing
+Version:	@-VERSION-@
+Release:	2
+Group:		System Environment/Libraries
+Vendor:		Internet2
+License:	Apache 2.0
+URL:		http://shibboleth.internet2.edu/
+Source0:	%{name}-%{version}.tar.gz
+BuildRoot:	%{_tmppath}/%{name}-%{version}-root
+
+BuildRequires:	openssl-devel, curl-devel >= 7.10.6
+BuildRequires:	xerces%{?xercesver}-c-devel >= 2.8.0, xml-security-c-devel >= 1.3.0
+BuildRequires:	zlib-devel, opensaml-devel >= 1.1.1, opensaml-devel < 2.0
+%{?_with_log4cpp:BuildRequires: log4cpp-devel >= 1.0}
+%{!?_with_log4cpp:BuildRequires: log4shib-devel}
+%{?_with_fastcgi:BuildRequires: fcgi-devel}
+%if "%{_vendor}" == "redhat"
+%{!?_without_builtinapache:BuildRequires: httpd-devel}
+%endif
+%if "%{_vendor}" == "suse"
+%{!?_without_builtinapache:BuildRequires: apache2-devel}
+%endif
+
+
+%description
+Shibboleth, a project of Internet2/MACE, is is an open source,
+attribute-based, cross-domain web single sign-on package, primarily
+based on the SAML standard.
+
+This package contains the Shibboleth runtime libraries and Apache
+server module.
+
+%package devel
+Summary: Shibboleth development files
+Group: Development/Libraries
+Requires: %{name} = %{version}
+
+%description devel
+Shibboleth, a project of Internet2/MACE, is is an open source,
+attribute-based, cross-domain web single sign-on package, primarily
+based on the SAML standard.
+
+This package contains the headers and other necessary files to build
+extensions using the Shibboleth runtime libraries.
+
+%prep
+%setup -q
+
+%build
+%configure %{?_with_fastcgi} %{?shib_options}
+%{__make}
+
+%install
+[ "$RPM_BUILD_ROOT" != "/" ] && %{__rm} -rf $RPM_BUILD_ROOT
+%{__make} install DESTDIR=$RPM_BUILD_ROOT
+
+%if "%{_vendor}" == "suse"
+	%{__sed} -i "s/\/var\/log\/httpd/\/var\/log\/apache2/g" \
+		$RPM_BUILD_ROOT/%{_sysconfdir}/%{name}/native.logger
+%endif
+
+find $RPM_BUILD_ROOT/%{_libexecdir} -type f -or -type l |
+  %{__sed} -e "s|$RPM_BUILD_ROOT||" | sort > rpm.filelist
+
+%check || :
+%{__make} check
+
+%clean
+[ "$RPM_BUILD_ROOT" != "/" ] && %{__rm} -rf $RPM_BUILD_ROOT
+
+%post
+%ifnos solaris2.8 solaris2.9 solaris2.10
+/sbin/ldconfig
+%endif
+
+# Plug the SP into Apache on a recognized system.
+APACHE_CONFIG="no"
+if [ -f $RPM_BUILD_ROOT/%{_libexecdir}/mod_shib_13.so ] ; then
+	APACHE_CONFIG="apache.config"
+fi
+if [ -f $RPM_BUILD_ROOT/%{_libexecdir}/mod_shib_20.so ] ; then
+	APACHE_CONFIG="apache2.config"
+fi
+if [ -f $RPM_BUILD_ROOT/%{_libexecdir}/mod_shib_22.so ] ; then
+	APACHE_CONFIG="apache22.config"
+fi
+if [ "$APACHE_CONFIG" != "no" ] ; then
+	APACHE_CONFD="no"
+	if [ -d %{_sysconfdir}/httpd/conf.d ] ; then
+    		APACHE_CONFD="%{_sysconfdir}/httpd/conf.d"
+	fi
+	if [ -d %{_sysconfdir}/apache2/conf.d ] ; then
+    		APACHE_CONFD="%{_sysconfdir}/apache2/conf.d"
+	fi
+	if [ "$APACHE_CONFD" != "no" ] ; then
+		if [ ! -f $APACHE_CONFD/shib.conf ] ; then
+%if "%{_vendor}" == "suse"
+		    %{__sed} "s/\/usr\/doc\/%{name}/\/usr\/share\/doc\/packages\/%{name}/g" \
+				%{_sysconfdir}/%{name}/$APACHE_CONFIG \
+				> $APACHE_CONFD/shib.conf
+%else
+			%{__sed} "s/\/usr\/doc\/%{name}/\/usr\/share\/doc\/%{name}-@-VERSION-@/g" \
+			    %{_sysconfdir}/%{name}/$APACHE_CONFIG \
+			    > $APACHE_CONFD/shib.conf
+%endif
+		fi
+	fi
+fi
+
+# Install the shibd init.d scripts and service
+%if "%{_vendor}" == "redhat"
+	if [ -d %{_sysconfdir}/init.d ] ; then
+		if [ ! -f %{_sysconfdir}/init.d/shibd ] ; then
+			%{__cp} -p %{_sysconfdir}/shibboleth/shibd-%{_vendor} %{_sysconfdir}/init.d/shibd
+			%{__chmod} 755 %{_sysconfdir}/init.d/shibd
+			chkconfig --add shibd
+		fi
+	fi
+%endif
+
+%postun
+%ifnos solaris2.8 solaris2.9 solaris2.10 
+/sbin/ldconfig
+%endif
+
+# delete the Apache configuration if we're being removed
+[ "$1" = 0 ] || exit 0
+[ -f %{_sysconfdir}/httpd/conf.d/shib.conf ] && \
+    %{__rm} -f %{_sysconfdir}/httpd/conf.d/shib.conf
+[ -f %{_sysconfdir}/apache2/conf.d/shib.conf ] && \
+    %{__rm} -f %{_sysconfdir}/apache2/conf.d/shib.conf
+
+# clear init.d state
+%if "%{_vendor}" == "redhat"
+	chkconfig --del shibd
+	[ -f %{_sysconfdir}/init.d/shibd ] && \
+	    %{__rm} -f %{_sysconfdir}/init.d/shibd
+%endif
+
+%files -f rpm.filelist
+%defattr(-,root,root,-)
+%{_sbindir}/shibd
+%{_sbindir}/siterefresh
+%{_bindir}/shibtest
+%{_libdir}/libshib.so.*
+%{_libdir}/libshib-target.so.*
+%dir %{_localstatedir}/log/shibboleth
+%dir %{_datadir}/xml/shibboleth
+%{_datadir}/xml/shibboleth/*.xsd
+%{_datadir}/xml/shibboleth/*.xsl
+%dir %{_sysconfdir}/shibboleth
+%config(noreplace) %{_sysconfdir}/shibboleth/*.xml
+%config(noreplace) %{_sysconfdir}/shibboleth/*.html
+%config(noreplace) %{_sysconfdir}/shibboleth/*.logger
+%config %{_sysconfdir}/shibboleth/sp-example.crt
+%config %{_sysconfdir}/shibboleth/sp-example.key
+%{_sysconfdir}/shibboleth/*.dist
+%{_sysconfdir}/shibboleth/apache*.config
+%{_sysconfdir}/%{name}/shibd-redhat
+%{_sysconfdir}/%{name}/shibd-debian
+%{_sysconfdir}/%{name}/shibd-osx.plist
+%docdir %{_datadir}/doc/shibboleth
+%{_datadir}/doc/shibboleth
+
+%exclude %{_bindir}/posttest
+%exclude %{_bindir}/test-client
+%exclude %{_libexecdir}/*.la
+
+%files devel
+%defattr(-,root,root,-)
+%{_includedir}
+%{_libdir}/libshib.so
+%{_libdir}/libshib-target.so
+
+%changelog
+* Mon Dec 17 2007 Scott Cantor   <cantor.2@osu.edu>  - 1.3.1-2
+- 1.3.1 initial release
+
+* Sat Sep 15 2007 Scott Cantor   <cantor.2@osu.edu>  - 1.3.1-1
+- 1.3.1 release candidate
+
+* Mon Oct 2 2006 Scott Cantor	<cantor.2@osu.edu>  - 1.3-11
+- Applied fix for secadv 20061002
+- Fix for metadata loader loop
+
+* Wed Jun 15 2006 Scott Cantor  <cantor.2@osu.edu>  - 1.3-10
+- Applied fix for sec 20060615
+
+* Fri Apr 15 2006 Scott Cantor  <cantor.2@osu.edu>  - 1.3-9
+- Misc. patches, SuSE, Apache 2.2, gcc 4.1, and 64-bit support
+
+* Mon Jan 9 2006 Scott Cantor  <cantor.2@osu.edu>  - 1.3-8
+- Applied new fix for secadv 20060109
+
+* Tue Nov 8 2005 Scott Cantor  <cantor.2@osu.edu>  - 1.3-7
+- Applied new fix for secadv 20050901 plus rollup
+
+* Fri Sep 23 2005 Scott Cantor  <cantor.2@osu.edu>  - 1.3-6
+- Minor patches and default config changes
+- pidfile patch
+- Fix shib.conf creation
+- Integrated init.d script
+- Prevent replacement of config files
+
+* Thu Sep 1 2005  Scott Cantor  <cantor.2@osu.edu>  - 1.3-5
+- Applied fix for secadv 20050901 plus rollup of NSAPI fixes
+
+* Sun Apr 24 2005  Scott Cantor  <cantor.2@osu.edu>  - 1.3-1
+- Updated test programs and location of schemas.
+- move siterefresh to to sbindir
+
+* Fri Apr  1 2005  Derek Atkins  <derek@ihtfp.com>  - 1.3-1
+- Add selinux-targeted-policy package
+- move shar to sbindir
+
+* Tue Oct 19 2004  Derek Atkins  <derek@ihtfp.com>  - 1.2-1
+- Create SPEC file based on various versions in existence.

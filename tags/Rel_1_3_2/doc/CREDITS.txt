@@ -1,0 +1,49 @@
+Shibboleth SP Implementation Team
+
+ Documentation, Testing, Quality Assurance, Yak Wrangling
+
+   Nate Klingenstein
+   Internet2
+
+ Design and Programming
+
+   Derek Atkins
+   IHTFP Consulting, Inc
+
+   Scott Cantor
+   The Ohio State University
+   
+   Jim Fox
+   University of Washington
+
+ Project Management
+
+   RL "Bob" Morgan
+   University of Washington
+
+   Steven Carmody
+   Brown University
+   
+   Ken Klingenstein
+   Internet2
+
+
+Thanks to: 
+
+    Internet2
+
+    The National Science Foundation
+    
+    Brian Pittman (WebAssign), Mark Earnest (PSU), James Shvarts (Columbia), 
+      Ryan Muldoon (Wisconsin), John Hopkins (PSU), Noah Levitt (Columbia), 
+      David Walker (UCOP) and many more; for much help with testing
+      
+    Joel Murphy (Buffalo), for much help with load testing and generally
+      pushing the software to its limits.
+
+	Ian Young for donating XSLT scripts for converting metadata across
+	  Shibboleth versions, SELinux policy work, and platform testing
+	  above and beyond the call.
+	  
+	Many, many community members who have donated time and machines to
+      help test the software and packaging on newer platforms.

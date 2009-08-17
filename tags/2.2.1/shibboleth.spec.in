@@ -1,0 +1,311 @@
+Name:		@PACKAGE@
+Version:	@PACKAGE_VERSION@
+Release:	1
+Summary:    Open source system for attribute-based Web SSO
+Group:		System Environment/Libraries
+Vendor:     Internet2
+License:	Apache 2.0
+URL:		http://shibboleth.internet2.edu/
+Source:     %{name}-sp-%{version}.tar.gz
+BuildRoot:	%{_tmppath}/%{name}-%{version}-root
+%if 0%{?suse_version} > 1030
+BuildRequires:  libXerces-c-devel >= 2.8.0
+BuildRequires:  libxml-security-c-devel >= 1.4.0
+BuildRequires:  libxmltooling-devel >= 1.2
+BuildRequires:  libsaml-devel >= 2.2
+%{?_with_log4cpp:BuildRequires: liblog4cpp-devel >= 1.0}
+%{!?_with_log4cpp:BuildRequires: liblog4shib-devel}
+%else
+BuildRequires:  xerces%{?xercesver}-c-devel >= 2.8.0
+BuildRequires:  xml-security-c-devel >= 1.4.0
+BuildRequires:  xmltooling-devel >= 1.2
+BuildRequires:  opensaml-devel >= 2.2
+%{?_with_log4cpp:BuildRequires: log4cpp-devel >= 1.0}
+%{!?_with_log4cpp:BuildRequires: log4shib-devel}
+%endif
+BuildRequires:  gcc-c++
+%{!?_without_doxygen:BuildRequires: doxygen}
+%{!?_without_odbc:BuildRequires:unixODBC-devel}
+BuildRequires:  zlib-devel
+%{?_with_fastcgi:BuildRequires: fcgi-devel}
+%if "%{_vendor}" == "redhat"
+%{!?_without_builtinapache:BuildRequires: httpd-devel}
+%endif
+%if "%{_vendor}" == "suse"
+%{!?_without_builtinapache:BuildRequires: apache2-devel}
+%endif
+
+%if "%{_vendor}" == "suse"
+%define pkgdocdir %{_docdir}/%{name}
+%else
+%define pkgdocdir %{_docdir}/%{name}-%{version}
+%endif
+
+%description
+Shibboleth is a Web Single Sign-On implementations based on OpenSAML
+that supports multiple protocols, federated identity, and the extensible
+exchange of rich attributes subject to privacy controls.
+
+This package contains the Shibboleth Service Provider runtime libraries
+and Apache module(s).
+
+%package devel
+Summary: Shibboleth development Headers
+Group: Development/Libraries
+Requires: %{name} = %{version}
+%if 0%{?suse_version} > 1030
+Requires: libXerces-c-devel >= 2.8.0
+Requires: libxml-security-c-devel >= 1.4.0
+Requires: libxmltooling-devel >= 1.2
+Requires: libsaml-devel >= 2.2
+%{?_with_log4cpp:Requires: liblog4cpp-devel >= 1.0}
+%{!?_with_log4cpp:Requires: liblog4shib-devel}
+%else
+Requires: xerces%{?xercesver}-c-devel >= 2.8.0
+Requires: xml-security-c-devel >= 1.4.0
+Requires: xmltooling-devel >= 1.2
+Requires: opensaml-devel >= 2.2
+%{?_with_log4cpp:Requires: log4cpp-devel >= 1.0}
+%{!?_with_log4cpp:Requires: log4shib-devel}
+%endif
+
+%description devel
+Shibboleth is a Web Single Sign-On implementations based on OpenSAML
+that supports multiple protocols, federated identity, and the extensible
+exchange of rich attributes subject to privacy controls.
+
+This package includes files needed for development with Shibboleth.
+
+
+%prep
+%setup -q
+
+%build
+%configure %{?_without_odbc:--disable-odbc} %{?_without_adfs:--disable-adfs} %{?_with_fastcgi} %{?_with_memcached} %{?shib_options}
+%{__make} pkgdocdir=%{pkgdocdir}
+
+%install
+%{__make} install NOKEYGEN=1 DESTDIR=$RPM_BUILD_ROOT pkgdocdir=%{pkgdocdir}
+
+%if "%{_vendor}" == "suse"
+	%{__sed} -i "s/\/var\/log\/httpd/\/var\/log\/apache2/g" \
+		$RPM_BUILD_ROOT%{_sysconfdir}/%{name}/native.logger
+%endif
+
+# Plug the SP into the built-in Apache on a recognized system.
+touch rpm.filelist
+APACHE_CONFIG="no"
+if [ -f $RPM_BUILD_ROOT%{_libdir}/%{name}/mod_shib_13.so ] ; then
+    APACHE_CONFIG="apache.config"
+fi
+if [ -f $RPM_BUILD_ROOT%{_libdir}/%{name}/mod_shib_20.so ] ; then
+    APACHE_CONFIG="apache2.config"
+fi
+if [ -f $RPM_BUILD_ROOT%{_libdir}/%{name}/mod_shib_22.so ] ; then
+    APACHE_CONFIG="apache22.config"
+fi
+%{?_without_builtinapache:APACHE_CONFIG="no"}
+if [ "$APACHE_CONFIG" != "no" ] ; then
+    APACHE_CONFD="no"
+    if [ -d %{_sysconfdir}/httpd/conf.d ] ; then
+            APACHE_CONFD="%{_sysconfdir}/httpd/conf.d"
+    fi
+    if [ -d %{_sysconfdir}/apache2/conf.d ] ; then
+            APACHE_CONFD="%{_sysconfdir}/apache2/conf.d"
+    fi
+    if [ "$APACHE_CONFD" != "no" ] ; then
+        %{__mkdir} -p $RPM_BUILD_ROOT$APACHE_CONFD
+        %{__cp} -p $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/$APACHE_CONFIG $RPM_BUILD_ROOT$APACHE_CONFD/shib.conf 
+        echo "%config $APACHE_CONFD/shib.conf" > rpm.filelist
+    fi
+fi
+
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "suse"
+	# %{_initddir} not yet in RHEL5, use deprecated %{_initrddir}
+	mkdir -p $RPM_BUILD_ROOT%{_initrddir}
+	%{__cp} -p $RPM_BUILD_ROOT%{_sysconfdir}/%{name}/shibd-%{_vendor} $RPM_BUILD_ROOT%{_initrddir}/shibd
+	%{__chmod} 755 $RPM_BUILD_ROOT%{_initrddir}/shibd
+%endif
+
+%check
+%{__make} check
+
+%clean
+[ "$RPM_BUILD_ROOT" != "/" ] && %{__rm} -rf $RPM_BUILD_ROOT
+
+%post
+%ifnos solaris2.8 solaris2.9 solaris2.10
+/sbin/ldconfig
+%endif
+
+# Key generation
+cd %{_sysconfdir}/%{name}
+sh ./keygen.sh -b
+
+%if "%{_vendor}" == "redhat"
+	# This adds the proper /etc/rc*.d links for the script
+	/sbin/chkconfig --add shibd
+	# On upgrade, restart components if they're already running.
+    if [ "$1" -gt "1" ] ; then
+        /etc/init.d/shibd status 1>/dev/null && /etc/init.d/shibd restart 1>/dev/null
+        %{!?_without_builtinapache:/etc/init.d/httpd status 1>/dev/null && /etc/init.d/httpd restart 1>/dev/null}
+    fi
+%endif
+%if "%{_vendor}" == "suse"
+    # This adds the proper /etc/rc*.d links for the script
+    /sbin/chkconfig --add shibd
+    cd /usr/sbin && ln -s /etc/init.d/shibd rcshibd
+    # On upgrade, restart components if they're already running.
+    if [ "$1" -gt "1" ] ; then
+        /etc/init.d/shibd status 1>/dev/null && /etc/init.d/shibd restart 1>/dev/null
+        %{!?_without_builtinapache:/etc/init.d/apache2 status 1>/dev/null && /etc/init.d/apache2 restart 1>/dev/null}
+    fi
+%endif
+
+%preun
+%if "%{_vendor}" == "redhat"
+	if [ "$1" = 0 ] ; then
+		/sbin/service shibd stop >/dev/null 2>&1
+		/sbin/chkconfig --del shibd
+	fi
+%endif
+%if "%{_vendor}" == "suse"
+    if [ "$1" = 0 ] ; then
+        /sbin/service shibd stop >/dev/null 2>&1
+        /sbin/chkconfig --del shibd
+        cd /usr/sbin && %{__rm} -f rcshibd
+    fi
+%endif
+
+%ifnos solaris2.8 solaris2.9 solaris2.10
+%postun -p /sbin/ldconfig
+%endif
+
+%posttrans
+# ugly hack if init script got removed during %postun by upgraded (buggy/2.1) package
+%if "%{_vendor}" == "redhat"
+    if [ ! -f %{_initrddir}/shibd ] ; then
+        if [ -f %{_sysconfdir}/%{name}/shibd-%{_vendor} ] ; then
+            %{__cp} -p %{_sysconfdir}/%{name}/shibd-%{_vendor} %{_initrddir}/shibd
+            %{__chmod} 755 %{_initrddir}/shibd
+            /sbin/chkconfig --add shibd
+        fi
+    fi
+%endif
+
+%files -f rpm.filelist
+%defattr(-,root,root,-)
+%{_sbindir}/shibd
+%{_bindir}/mdquery
+%{_bindir}/resolvertest
+%{_libdir}/libshibsp.so.*
+%{_libdir}/libshibsp-lite.so.*
+%dir %{_libdir}/%{name}
+%{_libdir}/%{name}/*
+%exclude %{_libdir}/%{name}/*.la
+%dir %{_localstatedir}/log/%{name}
+%dir %{_localstatedir}/run/%{name}
+%dir %{_datadir}/xml/%{name}
+%{_datadir}/xml/%{name}/*
+%dir %{_sysconfdir}/%{name}
+%config(noreplace) %{_sysconfdir}/%{name}/*.xml
+%config(noreplace) %{_sysconfdir}/%{name}/*.html
+%config(noreplace) %{_sysconfdir}/%{name}/*.logger
+%if "%{_vendor}" == "redhat" || "%{_vendor}" == "suse"
+%attr(755, root, root) %{_initrddir}/shibd
+%endif
+%{_sysconfdir}/%{name}/*.dist
+%{_sysconfdir}/%{name}/apache*.config
+%{_sysconfdir}/%{name}/shibd-*
+%attr(755, root, root) %{_sysconfdir}/%{name}/keygen.sh
+%attr(755, root, root) %{_sysconfdir}/%{name}/metagen.sh
+%{_sysconfdir}/%{name}/*.xsl
+%doc %{pkgdocdir}
+%exclude %{pkgdocdir}/api
+
+%files devel
+%defattr(-,root,root,-)
+%{_includedir}/*
+%{_libdir}/libshibsp.so
+%{_libdir}/libshibsp-lite.so
+%doc %{pkgdocdir}/api
+
+%changelog
+* Mon Aug 10 2009 Scott Cantor  <cantor.2@osu.edu>  - 2.2.1-1
+- Doc handling changes
+- SuSE init script
+
+* Tue Aug 4 2009 Scott Cantor  <cantor.2@osu.edu>  - 2.2.1-1
+- Initial version for 2.2.1, with shibd/httpd restart on upgrade
+
+* Thu Jun 25 2009 Scott Cantor  <cantor.2@osu.edu>  - 2.2-3
+- Add additional cleanup to posttrans fix
+
+* Tue Jun 23 2009 Scott Cantor  <cantor.2@osu.edu>  - 2.2-2
+- Reverse without_builtinapache macro test
+- Fix init script handling on Red Hat to handle upgrades
+
+* Wed Dec 3 2008  Scott Cantor  <cantor.2@osu.edu>  - 2.2-1
+- Bump minor version.
+- Make keygen.sh executable.
+- Fixing SUSE Xerces dependency name.
+- Optionally package shib.conf.
+
+* Tue Jun 10 2008  Scott Cantor  <cantor.2@osu.edu>  - 2.1-1
+- Change shib.conf handling to treat as config file.
+
+* Mon Mar 17 2008  Scott Cantor  <cantor.2@osu.edu>  - 2.0-6
+- Official release.
+
+* Fri Jan 18 2008  Scott Cantor  <cantor.2@osu.edu>  - 2.0-5
+- Release candidate 1.
+
+* Sun Oct 21 2007 Scott Cantor  <cantor.2@osu.edu>  - 2.0-4
+- libexec -> lib/shibboleth changes
+- Added doc subpackage
+
+* Thu Aug 16 2007 Scott Cantor  <cantor.2@osu.edu>  - 2.0-3
+- First public beta.
+
+* Fri Jul 13 2007 Scott Cantor	<cantor.2@osu.edu>  - 2.0-2
+- Second alpha release.
+
+* Sun Jun 10 2007 Scott Cantor	<cantor.2@osu.edu>  - 2.0-1
+- First alpha release.
+
+* Mon Oct 2 2006 Scott Cantor	<cantor.2@osu.edu>  - 1.3-11
+- Applied fix for secadv 20061002
+- Fix for metadata loader loop
+
+* Wed Jun 15 2006 Scott Cantor  <cantor.2@osu.edu>  - 1.3-10
+- Applied fix for sec 20060615
+
+* Fri Apr 15 2006 Scott Cantor  <cantor.2@osu.edu>  - 1.3-9
+- Misc. patches, SuSE, Apache 2.2, gcc 4.1, and 64-bit support
+
+* Mon Jan 9 2006 Scott Cantor  <cantor.2@osu.edu>  - 1.3-8
+- Applied new fix for secadv 20060109
+
+* Tue Nov 8 2005 Scott Cantor  <cantor.2@osu.edu>  - 1.3-7
+- Applied new fix for secadv 20050901 plus rollup
+
+* Fri Sep 23 2005 Scott Cantor  <cantor.2@osu.edu>  - 1.3-6
+- Minor patches and default config changes
+- pidfile patch
+- Fix shib.conf creation
+- Integrated init.d script
+- Prevent replacement of config files
+
+* Thu Sep 1 2005  Scott Cantor  <cantor.2@osu.edu>  - 1.3-5
+- Applied fix for secadv 20050901 plus rollup of NSAPI fixes
+
+* Sun Apr 24 2005  Scott Cantor  <cantor.2@osu.edu>  - 1.3-1
+- Updated test programs and location of schemas.
+- move siterefresh to to sbindir
+
+* Fri Apr  1 2005  Derek Atkins  <derek@ihtfp.com>  - 1.3-1
+- Add selinux-targeted-policy package
+- move shar to sbindir
+
+* Tue Oct 19 2004  Derek Atkins  <derek@ihtfp.com>  - 1.2-1
+- Create SPEC file based on various versions in existence.

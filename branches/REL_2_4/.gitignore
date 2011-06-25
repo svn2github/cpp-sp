@@ -18,6 +18,9 @@
 /*.ncb
 /shibboleth.spec
 /.settings
+/.project
+/.cproject
+/.autotools
 /*.suo
 /Debug
 /debug

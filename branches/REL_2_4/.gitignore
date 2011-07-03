@@ -119,7 +119,6 @@
 /memcache-store/x64
 
 # /msi/
-/msi/*.wsi
 /msi/*.msi
 /msi/compile.log
 

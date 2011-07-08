@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# Startup script for the Shibboleth Service Provider Daemon
+#
+# chkconfig: - 98 02
+# description: Shibboleth 2 Service Provider Daemon
+# processname: shibd
+# pidfile: @-PKGRUNDIR-@/shibd.pid
+# config: @-PKGSYSCONFDIR-@/shibboleth2.xml
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+shibd="@-PREFIX-@/sbin/shibd"
+SHIBD_USER=root
+pidfile=@-PKGRUNDIR-@/shibd.pid
+prog=shibd
+#VER=`cat /etc/redhat-release | awk '{print $3}' | awk -F . '{print $1}'`
+RETVAL=0
+
+if [ -f /etc/sysconfig/shibd ] ; then
+    . /etc/sysconfig/shibd
+fi
+
+start() {
+	echo -n $"Starting $prog: "
+	if [ -f /var/lock/subsys/shibd ] ; then
+		if [ -f $pidfile ]; then
+			read kpid < $pidfile
+			if checkpid $kpid 2>&1; then
+				echo "process already running"
+					return -1
+				else
+					echo "lock file found but no process running for pid $kpid, continuing"
+			fi
+		fi
+	fi
+
+#_RHEL6_	export LD_LIBRARY_PATH=/opt/shibboleth/lib:$LD_LIBRARY_PATH
+	export SHIBD_PID=$pidfile
+	touch $pidfile
+	chown $SHIBD_USER:$SHIBD_USER $pidfile
+	if [ -x /usr/sbin/selinuxenabled ] && /usr/sbin/selinuxenabled; then
+		/sbin/restorecon $pidfile
+	fi
+	daemon --user $SHIBD_USER $shibd -p $pidfile -f -w 30
+
+	RETVAL=$?
+	echo
+		[ $RETVAL = 0 ] && touch /var/lock/subsys/shibd
+	return $RETVAL
+}
+
+stop() {
+	echo -n $"Stopping $prog: "
+	killproc shibd
+
+	RETVAL=$?
+	echo
+	[ $RETVAL = 0 ] && rm -f /var/lock/subsys/shibd $pidfile
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	status $shibd
+	RETVAL=$?
+	;;
+  restart)
+	stop
+	sleep 5
+	start
+	;;
+  *)
+	echo $"Usage: $prog {start|stop|status|restart}"
+	exit 1
+esac
+
+exit $RETVAL

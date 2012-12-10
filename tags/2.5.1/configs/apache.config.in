@@ -1,0 +1,50 @@
+# https://wiki.shibboleth.net/confluence/display/SHIB2/NativeSPApacheConfig
+
+# RPM installations on platforms with a conf.d directory will
+# result in this file being copied into that directory for you
+# and preserved across upgrades.
+
+# For non-RPM installs, you should copy the relevant contents of
+# this file to a configuration location you control.
+
+#
+# Load the Shibboleth module.
+#
+LoadModule mod_shib @-PKGLIBDIR-@/mod_shib_13.so
+
+#
+# An Apache handler needs to be established for the "handler" location.
+# This applies the handler to any requests for a resource with a ".sso"
+# extension.
+#
+<Files *.sso>
+SetHandler shib-handler
+</Files>
+
+# Another way of addressing this is to apply Shibboleth
+# globally to the site in "lazy" session mode:
+# <Location />
+# AuthType shibboleth
+# require shibboleth
+# </Location>
+
+#
+# Used for example style sheet in error templates.
+#
+<IfModule mod_alias.c>
+  Alias /shibboleth-sp/main.css @-PKGWEBDIR-@/main.css
+</IfModule>
+
+#
+# Configure the module for content.
+#
+# You MUST enable AuthType shibboleth for the module to process
+# any requests, and there MUST be a require command as well. To
+# enable Shibboleth but not specify any session/access requirements
+# use "require shibboleth".
+#
+<Location /secure>
+  AuthType shibboleth
+  ShibRequestSetting requireSession 1
+  require valid-user
+</Location>
